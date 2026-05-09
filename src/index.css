@@ -1,0 +1,201 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/* 设计 Token（严格按 outio-design.md 第 4 节配置，Tailwind v4 @theme 写法） */
+/* ------------------------------------------------------------------ */
+@theme {
+  /* 字体族 */
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont,
+    sans-serif;
+
+  /* ⚠ 注意：Tailwind v4 的 max-w-{name} 直接读 --spacing-{name}，
+     而我们下面定义了 --spacing-sm/md/lg/xl 为设计 token（8/16/24/32px），
+     这会让 max-w-md 变成 16px。任何需要"移动端容器宽度"的地方
+     必须用 max-w-[28rem]（不要用 max-w-md），见 App.tsx / BottomNavBar / Detail。 */
+
+  /* ------ 颜色 ------ */
+  --color-surface-container-lowest: #ffffff;
+  --color-on-surface: #1c1b22;
+  --color-on-tertiary-container: #ffc69a;
+  --color-on-error-container: #93000a;
+  --color-surface: #fcf8ff;
+  --color-surface-container: #f0ecf6;
+  --color-surface-variant: #e5e1eb;
+  --color-surface-container-low: #f6f2fc;
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-primary: #3b309e;
+  --color-tertiary: #683500;
+  --color-on-secondary-container: #636371;
+  --color-on-tertiary-fixed: #2f1500;
+  --color-inverse-on-surface: #f3eff9;
+  --color-secondary: #5d5d6b;
+  --color-primary-fixed: #e3dfff;
+  --color-inverse-primary: #c5c0ff;
+  --color-on-secondary: #ffffff;
+  --color-tertiary-fixed: #ffdcc3;
+  --color-outline: #787584;
+  --color-on-background: #1c1b22;
+  --color-secondary-container: #e2e1f2;
+  --color-outline-variant: #c8c4d5;
+  --color-tertiary-fixed-dim: #ffb77d;
+  --color-surface-dim: #dcd8e2;
+  --color-on-secondary-fixed-variant: #454653;
+  --color-primary-fixed-dim: #c5c0ff;
+  --color-surface-container-high: #ebe6f0;
+  --color-surface-tint: #584fbc;
+  --color-surface-bright: #fcf8ff;
+  --color-error-container: #ffdad6;
+  --color-background: #fcf8ff;
+  --color-primary-container: #534ab7;
+  --color-on-primary-container: #d1ccff;
+  --color-on-primary: #ffffff;
+  --color-on-surface-variant: #474553;
+  --color-inverse-surface: #312f37;
+  --color-on-secondary-fixed: #191b26;
+  --color-surface-container-highest: #e5e1eb;
+  --color-on-primary-fixed-variant: #3f35a3;
+  --color-secondary-fixed: #e2e1f2;
+  --color-on-primary-fixed: #140067;
+  --color-on-tertiary-fixed-variant: #6e3900;
+  --color-secondary-fixed-dim: #c5c5d5;
+  --color-tertiary-container: #8a4900;
+  --color-on-tertiary: #ffffff;
+
+  /* design.md 1.1 中明确列出的 UI 专用颜色 */
+  --color-card-border: #dddbd6;
+  --color-page-bg: #f5f5f3;
+  --color-tag-selected-bg: #eeedfe;
+  --color-tag-selected-text: #534ab7;
+  --color-tag-neutral-bg: #e6e5e0;
+  --color-tag-neutral-text: #555555;
+
+  /* ------ 间距（自定义命名 token） ------ */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-gutter: 12px;
+  --spacing-container_margin: 16px;
+  --spacing-unit: 4px;
+
+  /* ------ 圆角 ------ */
+  --radius-sm: 0.0625rem;
+  --radius-DEFAULT: 0.125rem; /* 2px */
+  --radius-lg: 0.25rem;       /* 4px - card */
+  --radius-xl: 0.5rem;        /* 8px - logo, badge */
+  --radius-full: 0.75rem;     /* 12px - pill, button, search input（按 design.md 覆盖） */
+
+  /* ------ 字号 ------ */
+  --text-heading-md: 16px;
+  --text-heading-md--line-height: 1.2;
+  --text-heading-md--letter-spacing: -0.01em;
+  --text-heading-md--font-weight: 500;
+
+  --text-heading-lg: 18px;
+  --text-heading-lg--line-height: 1.2;
+  --text-heading-lg--letter-spacing: -0.01em;
+  --text-heading-lg--font-weight: 500;
+
+  --text-body-md: 14px;
+  --text-body-md--line-height: 1.5;
+  --text-body-md--letter-spacing: 0;
+  --text-body-md--font-weight: 400;
+
+  --text-label-md: 12px;
+  --text-label-md--line-height: 1.4;
+  --text-label-md--letter-spacing: 0.02em;
+  --text-label-md--font-weight: 500;
+
+  --text-caption: 12px;
+  --text-caption--line-height: 1.4;
+  --text-caption--letter-spacing: 0;
+  --text-caption--font-weight: 400;
+}
+
+/* ------------------------------------------------------------------ */
+/* 全局基线 */
+/* ------------------------------------------------------------------ */
+html,
+body {
+  margin: 0;
+  background-color: var(--color-page-bg);
+  color: var(--color-on-surface);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+/* Material Symbols 默认样式（FILL 0, wght 300, GRAD 0, opsz 24） */
+.material-symbols-outlined {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 300,
+    "GRAD" 0,
+    "opsz" 24;
+  font-size: 20px;
+  line-height: 1;
+  user-select: none;
+}
+
+.material-symbols-outlined.filled {
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 300,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+/* 隐藏横向滚动条 */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* iOS 安全区适配 */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* range 滑块（design.md 2.7：track 4px，thumb 16px primary） */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-surface-container-high);
+}
+input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-surface-container-high);
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  margin-top: -6px;
+  border: none;
+}
+input[type='range']::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  border: none;
+}
