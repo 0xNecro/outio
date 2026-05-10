@@ -49,7 +49,8 @@ export default function SearchInput({
         onKeyDown={(e) => e.key === 'Enter' && submit()}
         placeholder={placeholder}
         className="flex-1 bg-transparent text-on-surface placeholder:text-outline-variant focus:outline-none"
-        style={{ fontSize: '14px', lineHeight: 1.5 }}
+        // 16px 防止 iOS Safari focus 时自动放大；其他 body-md 字号保持 14px
+        style={{ fontSize: '16px', lineHeight: 1.5 }}
       />
       {value && (
         <button
