@@ -151,7 +151,7 @@ export async function getDestination(id: string): Promise<Destination | null> {
   return (data as unknown as Destination | null) ?? null;
 }
 
-// SearchResults 页用：name 或 description 模糊匹配
+// SearchResults 页用：全表 name 模糊匹配（不限制分类、不要求 description 非空）
 export async function searchDestinations(
   query: string,
   limit = 10,
@@ -161,8 +161,7 @@ export async function searchDestinations(
   const { data, error } = await supabase
     .from('destinations')
     .select(SELECT_COLS)
-    .or(`name.ilike.%${q}%,description.ilike.%${q}%`)
-    .not('description', 'is', null)
+    .ilike('name', `%${q}%`)
     .limit(limit);
   if (error) throw error;
   return (data ?? []) as unknown as Destination[];
