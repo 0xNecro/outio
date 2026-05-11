@@ -1,24 +1,33 @@
-import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import TopAppBar from '../components/TopAppBar';
 import BottomNavBar from '../components/BottomNavBar';
 import SearchInput from '../components/SearchInput';
 import FilterTags from '../components/FilterTags';
 import DestinationCard from '../components/DestinationCard';
-import { QUICK_TAGS, TODO_TAGS, type QuickTag } from '../lib/api';
+import { QUICK_TAGS } from '../lib/api';
 import { useDestinations } from '../hooks/useDestinations';
 
-export default function Home() {
-  const [selected, setSelected] = useState<QuickTag[]>([]);
+// 快捷标签 → 自然语言查询（点击直接走 AI 搜索）
+const TAG_TO_QUERY: Record<string, string> = {
+  亲子: '适合带 18 个月小孩去的地方',
+  周末: '周末适合家庭出游的地方',
+  免费: '免费的家庭出游目的地',
+  有山有水: '有山有水适合带孩子去',
+  '1h 车程内': '从海淀出发 1 小时车程内的家庭目的地',
+  室外: '适合带孩子和老人的户外目的地',
+};
 
-  const toggle = (t: string) =>
-    setSelected((prev) => {
-      const tag = t as QuickTag;
-      return prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag];
-    });
+export default function Home() {
+  const navigate = useNavigate();
+
+  const onTagClick = (t: string) => {
+    const q = TAG_TO_QUERY[t] ?? t;
+    navigate(`/search?q=${encodeURIComponent(q)}`);
+  };
 
   const { data, loading, error } = useDestinations({
     city: '北京市',
-    filters: selected,
+    filters: [],
   });
 
   return (
@@ -45,8 +54,8 @@ export default function Home() {
         </p>
         <FilterTags
           tags={QUICK_TAGS as unknown as string[]}
-          selected={selected as string[]}
-          onToggle={toggle}
+          selected={[]}
+          onToggle={onTagClick}
         />
 
         <hr
@@ -89,39 +98,8 @@ export default function Home() {
           className="mt-xs text-secondary"
           style={{ fontSize: '12px', lineHeight: 1.4 }}
         >
-          {selected.length
-            ? `已应用 ${selected.length} 个筛选 · 北京市`
-            : '北京市 · 景区/公园/博物馆等核心目的地，有简介者优先'}
+          北京市 · 景区/公园/博物馆等核心目的地，有简介者优先
         </p>
-
-        {/* 占位标签提示：选中却未实现的筛选 */}
-        {selected.some((t) => TODO_TAGS.includes(t)) && (
-          <div
-            className="mt-sm flex items-start gap-sm"
-            style={{
-              backgroundColor: 'var(--color-primary-fixed)',
-              color: 'var(--color-primary)',
-              borderRadius: '4px',
-              padding: '10px 12px',
-              fontSize: '12px',
-              lineHeight: 1.4,
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: '16px', marginTop: '1px' }}
-            >
-              schedule
-            </span>
-            <span>
-              {selected
-                .filter((t) => TODO_TAGS.includes(t))
-                .map((t) => `「${t}」`)
-                .join('、')}
-              筛选即将上线，当前仍按默认列表展示。
-            </span>
-          </div>
-        )}
 
         {/* 状态分支：加载 / 错误 / 空 / 列表 */}
         {loading && <Skeletons count={3} />}
@@ -129,13 +107,7 @@ export default function Home() {
           <ErrorBox message={error} hint="检查 .env 中 Supabase 配置或网络" />
         )}
         {!loading && !error && data.length === 0 && (
-          <EmptyBox
-            message={
-              selected.length
-                ? '当前筛选下没有匹配目的地'
-                : '北京市暂无可显示数据'
-            }
-          />
+          <EmptyBox message="北京市暂无可显示数据" />
         )}
         {!loading && !error && data.length > 0 && (
           <div
