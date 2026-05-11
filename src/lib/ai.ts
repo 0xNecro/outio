@@ -85,6 +85,7 @@ function calcAgeDesc(birth: string): string {
 }
 
 async function callDeepSeek(
+  tag: string,
   systemPrompt: string,
   userPrompt: string,
   opts: { temperature?: number; jsonMode?: boolean } = {},
@@ -100,37 +101,96 @@ async function callDeepSeek(
   };
   if (opts.jsonMode) body.response_format = { type: 'json_object' };
 
-  const resp = await fetch(DEEPSEEK_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify(body),
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`DeepSeek ${resp.status}: ${text.slice(0, 200)}`);
+  console.group(`[ai ${tag}] DeepSeek 请求`);
+  console.log('system prompt:\n', systemPrompt);
+  console.log('user prompt:\n', userPrompt);
+  console.log('body:', body);
+  console.groupEnd();
+
+  let resp: Response;
+  try {
+    resp = await fetch(DEEPSEEK_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    console.error(`[ai ${tag}] fetch 抛错（网络/CORS）:`, e);
+    throw e;
   }
-  const json = (await resp.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const content = json.choices?.[0]?.message?.content;
-  if (!content) throw new Error('DeepSeek 返回空内容');
+
+  // 始终用 text() 拿原始响应，自己 parse，方便看真实内容
+  const rawBody = await resp.text();
+  console.log(`[ai ${tag}] HTTP ${resp.status}, raw body length=${rawBody.length}`);
+  console.log(`[ai ${tag}] raw response body:\n`, rawBody);
+
+  if (!resp.ok) {
+    throw new Error(`DeepSeek ${resp.status}: ${rawBody.slice(0, 300)}`);
+  }
+
+  let envelope: { choices?: Array<{ message?: { content?: unknown } }> };
+  try {
+    envelope = JSON.parse(rawBody);
+  } catch (e) {
+    console.error(`[ai ${tag}] 外层响应不是合法 JSON:`, e);
+    throw new Error(
+      `DeepSeek 响应非 JSON：${rawBody.slice(0, 200)}`,
+    );
+  }
+  console.log(`[ai ${tag}] parsed envelope:`, envelope);
+
+  const content = envelope.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || !content.trim()) {
+    console.error(`[ai ${tag}] choices[0].message.content 不是非空字符串：`, content);
+    throw new Error('DeepSeek 返回空内容');
+  }
+  console.log(`[ai ${tag}] content string:\n`, content);
   return content;
 }
 
-// 模型偶尔会在 JSON 外裹 ```json ... ``` 或解释文字，做兜底
-function extractJson(s: string): unknown {
-  const trimmed = s.trim();
+// 模型可能返回：
+//   - 纯 JSON
+//   - ```json\n{...}\n```（markdown 围栏）
+//   - 解释文字 + JSON 在中间
+// 全部要兜底
+function stripMarkdownFence(s: string): string {
+  let t = s.trim();
+  // 去 BOM
+  if (t.charCodeAt(0) === 0xfeff) t = t.slice(1);
+  // ```json ... ``` 或 ``` ... ```
+  const fence = t.match(/^```(?:json|JSON)?\s*\n?([\s\S]*?)\n?```$/);
+  if (fence) return fence[1].trim();
+  return t;
+}
+
+function extractJson(tag: string, s: string): unknown {
+  const cleaned = stripMarkdownFence(s);
+  console.log(`[ai ${tag}] cleaned (markdown stripped):\n`, cleaned);
+
   try {
-    return JSON.parse(trimmed);
-  } catch {
-    // fall through
+    const parsed = JSON.parse(cleaned);
+    console.log(`[ai ${tag}] JSON.parse 成功`, parsed);
+    return parsed;
+  } catch (e) {
+    console.warn(`[ai ${tag}] 直接 JSON.parse 失败，尝试在文本中找 {...}：`, e);
   }
-  const m = trimmed.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('LLM 返回不含 JSON');
-  return JSON.parse(m[0]);
+  const m = cleaned.match(/\{[\s\S]*\}/);
+  if (!m) {
+    console.error(`[ai ${tag}] 文本中找不到 {} 包裹的 JSON`);
+    throw new Error('LLM 返回不含 JSON');
+  }
+  console.log(`[ai ${tag}] 提取 {...} 片段：\n`, m[0]);
+  try {
+    const parsed = JSON.parse(m[0]);
+    console.log(`[ai ${tag}] 片段 JSON.parse 成功`, parsed);
+    return parsed;
+  } catch (e) {
+    console.error(`[ai ${tag}] 片段也无法 parse：`, e);
+    throw e;
+  }
 }
 
 const INTENT_SYSTEM = `你是 Outio 出行推荐助手的意图解析模块。
@@ -155,13 +215,15 @@ export async function parseIntent(
   userProfile: UserProfile,
 ): Promise<ParsedIntent> {
   const userPrompt = `用户画像：\n${profileBrief(userProfile)}\n\n用户查询："${query}"\n\n输出 JSON。`;
+  console.log('[ai parseIntent] 开始，原始查询:', query);
   let raw: string;
   try {
-    raw = await callDeepSeek(INTENT_SYSTEM, userPrompt, {
+    raw = await callDeepSeek('parseIntent', INTENT_SYSTEM, userPrompt, {
       temperature: 0.3,
       jsonMode: true,
     });
   } catch (e) {
+    console.error('[ai parseIntent] callDeepSeek 失败:', e);
     throw new AiError(
       e instanceof Error ? e.message : String(e),
       'parse',
@@ -170,8 +232,9 @@ export async function parseIntent(
 
   let parsed: Record<string, unknown>;
   try {
-    parsed = extractJson(raw) as Record<string, unknown>;
+    parsed = extractJson('parseIntent', raw) as Record<string, unknown>;
   } catch (e) {
+    console.error('[ai parseIntent] extractJson 失败:', e, '原始 content:', raw);
     throw new AiError(
       `意图 JSON 解析失败：${e instanceof Error ? e.message : String(e)}`,
       'parse',
@@ -271,13 +334,15 @@ export async function rankAndExplain(
     '输出 JSON。',
   ].join('\n\n');
 
+  console.log('[ai rankAndExplain] 开始，候选数:', candidates.length);
   let raw: string;
   try {
-    raw = await callDeepSeek(RANK_SYSTEM, userPrompt, {
+    raw = await callDeepSeek('rankAndExplain', RANK_SYSTEM, userPrompt, {
       temperature: 0.5,
       jsonMode: true,
     });
   } catch (e) {
+    console.error('[ai rankAndExplain] callDeepSeek 失败:', e);
     throw new AiError(
       e instanceof Error ? e.message : String(e),
       'rank',
@@ -286,14 +351,16 @@ export async function rankAndExplain(
 
   let parsed: Record<string, unknown>;
   try {
-    parsed = extractJson(raw) as Record<string, unknown>;
+    parsed = extractJson('rankAndExplain', raw) as Record<string, unknown>;
   } catch (e) {
+    console.error('[ai rankAndExplain] extractJson 失败:', e, '原始 content:', raw);
     throw new AiError(
       `精排 JSON 解析失败：${e instanceof Error ? e.message : String(e)}`,
       'rank',
     );
   }
 
+  console.log('[ai rankAndExplain] 解析后 rankings 数:', Array.isArray(parsed.rankings) ? (parsed.rankings as unknown[]).length : 0);
   const rankings = Array.isArray(parsed.rankings) ? parsed.rankings : [];
   const validIds = new Set(destinations.map((d) => d.id));
   return rankings

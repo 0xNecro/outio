@@ -47,10 +47,16 @@ async function fetchCandidates(intent: Awaited<ReturnType<typeof parseIntent>>):
     q = q.ilike('name', `%${kw.replace(/[,()]/g, ' ')}%`);
   }
 
-  // 拉得比 maxResults 多一些，让 AI 精排有挑选空间
-  q = q.limit(Math.max(intent.maxResults * 1.5, 20));
+  // 拉得比 maxResults 多一些，让 AI 精排有挑选空间。limit 必须是整数
+  const limit = Math.max(Math.round(intent.maxResults * 1.5), 20);
+  q = q.limit(limit);
+  console.log('[useSearchResults] fetchCandidates intent=', intent, 'limit=', limit);
   const { data, error } = await q;
-  if (error) throw error;
+  if (error) {
+    console.error('[useSearchResults] Supabase 查询出错:', error);
+    throw error;
+  }
+  console.log('[useSearchResults] Supabase 返回行数:', data?.length ?? 0);
   return (data ?? []) as unknown as Destination[];
 }
 
@@ -73,8 +79,10 @@ export function useSearchResults(query: string): State {
 
     (async () => {
       try {
+        console.log('[useSearchResults] ===== 开始 AI 搜索流程，query =', query);
         // ===== 1. 意图解析 =====
         const intent = await parseIntent(query, mockProfile);
+        console.log('[useSearchResults] 意图解析结果:', intent);
         if (cancelled) return;
         setState((s) => ({ ...s, stage: 'querying' }));
 
