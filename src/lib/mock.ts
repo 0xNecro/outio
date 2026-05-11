@@ -7,10 +7,9 @@ export const mockProfile: UserProfile = {
     { name: '旺仔', role: 'child', birth_date: '2024-11-28' },
     { name: '爸爸', role: 'parent' },
     { name: '妈妈', role: 'parent' },
-    { name: '奶奶', role: 'grandparent', mobility: 'limited' },
   ],
   home_city: '北京',
-  home_address: '海淀区中关村',
+  home_address: '顺义区后沙峪',
   preferences: {
     max_drive_minutes: 90,
     prefers_outdoor: true,
