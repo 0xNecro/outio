@@ -5,11 +5,13 @@ import type { Destination, UserProfile } from './types';
 const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com/chat/completions';
 const DEEPSEEK_MODEL = 'deepseek-chat';
 
-// 与 destinations 表 main_category 取值对齐
+// 与 destinations 表 main_category 取值对齐（含 31w POI 中出现过的扩展类目）
 const ALLOWED_CATEGORIES = [
-  '景区', '公园', '博物馆', '游乐场', '寺庙宗教',
-  '科技馆', '美术馆', '展览馆', '天文馆', '采摘园',
-  '度假村', '露营地', '水上活动', '温泉洗浴', '垂钓园',
+  '景区', '公园', '博物馆', '游乐场', '采摘园',
+  '度假村', '露营地', '寺庙宗教', '垂钓园', '美术馆',
+  '展览馆', '科技馆', '天文馆', '水上活动', '温泉洗浴',
+  '亲子活动', '亲子服务', '休闲娱乐', '文化场所', '运动场馆',
+  '商业街区', '酒店', '剧场演出', '图书馆', '其他',
 ] as const;
 
 export interface ParsedIntent {
@@ -193,22 +195,29 @@ function extractJson(tag: string, s: string): unknown {
   }
 }
 
-const INTENT_SYSTEM = `你是 Outio 出行推荐助手的意图解析模块。
-用户会用自然语言描述想去哪里玩，你需要把它转成结构化的筛选条件 JSON。
+const INTENT_SYSTEM = `你是 Outio 出行推荐助手的意图解析模块。用户会用自然语言描述想去哪里玩，你需要将其转化为数据库查询条件。
 
-可用的 main_category 取值（只能从中选）：
-${ALLOWED_CATEGORIES.join('、')}
+核心原则：
+- 宽松匹配：宁可多返回候选，不要过度限制。用户说"有山有水"不代表必须同时有山和水
+- categories 尽量给 3-5 个相关分类，不要只给1个
+- keywords 最多给2个核心关键词，不要把用户每个字都变成关键词
+- childFriendly/outdoor/season 只在用户明确提到时才设为 true/false，否则设为 null
+- maxResults 默认 30(给精排留够候选)
+- city 默认"北京市"
 
-输出 JSON schema（不要多余字段，不要解释）：
-{
-  "categories": string[],   // 从上面列表里选，可以多选；如果用户没明确就给最相关的 2-4 个
-  "city": string,           // 必须是带"市"后缀的全名，如 "北京市"、"上海市"。默认 "北京市"
-  "keywords": string[],     // 用户提到的具体名称/关键词，没有就空数组
-  "childFriendly": boolean, // 用户提到带孩子/亲子/遛娃 → true
-  "outdoor": boolean,       // 用户提到户外/室外/野外 → true；提到避雨/室内 → false
-  "season": string,         // 春/夏/秋/冬，没提就 ""
-  "maxResults": number      // 默认 20
-}`;
+可选的 categories 值：${ALLOWED_CATEGORIES.join('、')}
+
+示例：
+用户："带孩子去有山有水的地方"
+输出：{"categories":["景区","公园","水上活动","露营地","度假村"],"city":"北京市","keywords":["山","水"],"childFriendly":true,"outdoor":null,"season":null,"maxResults":30}
+
+用户："室内儿童乐园"
+输出：{"categories":["游乐场","亲子活动","休闲娱乐","亲子服务"],"city":"北京市","keywords":["儿童乐园","室内"],"childFriendly":true,"outdoor":false,"season":null,"maxResults":30}
+
+用户："免费的公园，适合推婴儿车"
+输出：{"categories":["公园","景区"],"city":"北京市","keywords":[],"childFriendly":true,"outdoor":true,"season":null,"maxResults":30}
+
+只返回 JSON，不要其他文字。`;
 
 export async function parseIntent(
   query: string,
@@ -265,26 +274,39 @@ export async function parseIntent(
     maxResults:
       typeof parsed.maxResults === 'number' && parsed.maxResults > 0
         ? Math.min(parsed.maxResults, 30)
-        : 20,
+        : 30,
   };
 }
 
-const RANK_SYSTEM = `你是 Outio 出行推荐助手的精排模块。
-输入：用户的原始查询 + 家庭画像 + 候选目的地列表（包含 id/名称/类目/描述/标签等）。
-任务：从候选中挑出最适合这个家庭的项目，按推荐度排序，并为每个写一条个性化推荐理由。
+const RANK_SYSTEM = `你是 Outio 出行推荐助手。根据用户需求和家庭画像，从候选目的地中精选最合适的，并为每个写一段有吸引力的推荐理由。
 
-推荐理由要求：
-- 简洁 1-2 句话（25-60 字）
-- 具体说明为什么这个地方适合这个家庭，要引用画像里的具体信息（如孩子名字、年龄、老人、车型）
-- 不要罗列景点本身的介绍，重点说"为什么是你"
+用户画像：
+- 家住北京海淀中关村
+- 有一个18个月大的孩子叫旺仔
+- 家里有奶奶，行动能力一般
+- 纯电车型（充电桩是加分项，不是硬性要求）
+- 偏好户外活动
 
-输出 JSON schema（不要多余字段，不要解释）：
-{
-  "rankings": [
-    { "id": "<候选 id>", "reason": "<推荐理由>" }
-  ]
-}
-顺序即推荐排序；可以舍弃明显不合适的，但保留至少 5 条（如果有这么多候选）。`;
+推荐理由写作要求：
+- 25-60字，要有具体信息和场景感，不要泛泛而谈
+- 突出这个地方的独特卖点，不要每个都说"适合带孩子"
+- 可以提到具体的玩法、特色景观、最佳时间等
+- 如果知道这个地方的特点（比如有湖、有花、有动物），要具体说出来
+- 不要每条都提奶奶和婴儿车，只在确实相关时提
+- 语气轻松自然，像朋友推荐，不像导游念稿
+
+好的推荐理由示例：
+- "春天樱花大道绝美，小路平坦可以推车，湖边还能喂鸭子，旺仔肯定喜欢。"
+- "藏在胡同里的小型自然博物馆，恐龙化石和蝴蝶标本，小朋友看得走不动路。"
+- "京郊最容易到达的溪谷，水浅可以踩水，山不高但树荫多，夏天凉快。"
+
+差的推荐理由（避免）：
+- "适合亲子游玩，环境不错。"（太泛）
+- "推着婴儿车带旺仔散步很方便，奶奶行动不便也能轻松到达。"（模板化）
+
+从候选中选出最适合的 5-10 个，按推荐度排序。输出 JSON 对象，包含 rankings 数组：
+{"rankings":[{"id":"目的地UUID","reason":"推荐理由"}]}
+只返回 JSON，不要其他文字。`;
 
 interface RankCandidate {
   id: string;
@@ -349,9 +371,9 @@ export async function rankAndExplain(
     );
   }
 
-  let parsed: Record<string, unknown>;
+  let parsedAny: unknown;
   try {
-    parsed = extractJson('rankAndExplain', raw) as Record<string, unknown>;
+    parsedAny = extractJson('rankAndExplain', raw);
   } catch (e) {
     console.error('[ai rankAndExplain] extractJson 失败:', e, '原始 content:', raw);
     throw new AiError(
@@ -360,8 +382,13 @@ export async function rankAndExplain(
     );
   }
 
-  console.log('[ai rankAndExplain] 解析后 rankings 数:', Array.isArray(parsed.rankings) ? (parsed.rankings as unknown[]).length : 0);
-  const rankings = Array.isArray(parsed.rankings) ? parsed.rankings : [];
+  // 兼容两种格式：顶层数组 / 对象里的 rankings 字段
+  const rankings: unknown[] = Array.isArray(parsedAny)
+    ? parsedAny
+    : Array.isArray((parsedAny as { rankings?: unknown }).rankings)
+      ? ((parsedAny as { rankings: unknown[] }).rankings)
+      : [];
+  console.log('[ai rankAndExplain] 解析后 rankings 数:', rankings.length);
   const validIds = new Set(destinations.map((d) => d.id));
   return rankings
     .filter(

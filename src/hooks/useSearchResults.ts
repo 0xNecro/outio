@@ -25,14 +25,30 @@ const SELECT_COLS = [
   'phone', 'website', 'data_source', 'confidence',
 ].join(',');
 
+type Intent = Awaited<ReturnType<typeof parseIntent>>;
+
+// PostgREST or() value 里的 ',' '(' ')' 是分隔符，必须剔除避免破坏语法
+function sanitizeKw(s: string): string {
+  return s.trim().replace(/[,()*%]/g, ' ');
+}
+
+interface FetchOpts {
+  applyCategories?: boolean; // 默认 true；false 时跳过 main_category 限制
+}
+
 // 用解析出的意图查 Supabase 拉候选
-async function fetchCandidates(intent: Awaited<ReturnType<typeof parseIntent>>): Promise<Destination[]> {
+async function fetchCandidates(
+  intent: Intent,
+  opts: FetchOpts = {},
+): Promise<Destination[]> {
+  const applyCategories = opts.applyCategories ?? true;
+
   let q = supabase
     .from('destinations')
     .select(SELECT_COLS)
     .eq('city', intent.city);
 
-  if (intent.categories.length > 0) {
+  if (applyCategories && intent.categories.length > 0) {
     q = q.in('main_category', intent.categories);
   }
   if (intent.childFriendly === true) {
@@ -41,16 +57,26 @@ async function fetchCandidates(intent: Awaited<ReturnType<typeof parseIntent>>):
   if (intent.outdoor === true) {
     q = q.in('indoor_outdoor', ['outdoor', 'both']);
   }
-  // 关键词：取第一个做 name ilike（多关键词 ilike 一般召回少，先简单做）
-  const kw = intent.keywords[0]?.trim();
-  if (kw) {
-    q = q.ilike('name', `%${kw.replace(/[,()]/g, ' ')}%`);
+
+  // 关键词：多关键词 OR 匹配（name 或 description 命中任意一个即可）
+  const kws = intent.keywords.map(sanitizeKw).filter(Boolean).slice(0, 2);
+  if (kws.length > 0) {
+    const orParts = kws.flatMap((k) => [
+      `name.ilike.%${k}%`,
+      `description.ilike.%${k}%`,
+    ]);
+    q = q.or(orParts.join(','));
   }
 
-  // 拉得比 maxResults 多一些，让 AI 精排有挑选空间。limit 必须是整数
-  const limit = Math.max(Math.round(intent.maxResults * 1.5), 20);
+  // 拉得比 maxResults 多一些，给 AI 精排留挑选空间。limit 必须是整数
+  const limit = Math.max(Math.round(intent.maxResults * 1.5), 30);
   q = q.limit(limit);
-  console.log('[useSearchResults] fetchCandidates intent=', intent, 'limit=', limit);
+  console.log('[useSearchResults] fetchCandidates', {
+    intent,
+    applyCategories,
+    keywords: kws,
+    limit,
+  });
   const { data, error } = await q;
   if (error) {
     console.error('[useSearchResults] Supabase 查询出错:', error);
@@ -90,14 +116,36 @@ export function useSearchResults(query: string): State {
         let candidates = await fetchCandidates(intent);
         if (cancelled) return;
 
-        // 候选为空时放宽：去掉 category/child/outdoor 限制再来一次
+        // 一级放宽：候选 < 10 时去掉分类限制（保留 keywords / child / outdoor）
+        if (candidates.length < 10) {
+          console.log(
+            `[useSearchResults] 候选只有 ${candidates.length} 条，放宽分类限制重试`,
+          );
+          const broader = await fetchCandidates(intent, { applyCategories: false });
+          if (cancelled) return;
+          // 用 id 去重合并，原候选优先
+          const seen = new Set(candidates.map((c) => c.id));
+          for (const c of broader) {
+            if (!seen.has(c.id)) {
+              candidates.push(c);
+              seen.add(c.id);
+            }
+          }
+        }
+
+        // 二级放宽：还是 0 条 → 把 keywords / child / outdoor 也去掉，只按 city 拉
         if (candidates.length === 0) {
-          candidates = await fetchCandidates({
-            ...intent,
-            categories: [],
-            childFriendly: undefined,
-            outdoor: undefined,
-          });
+          console.log('[useSearchResults] 仍 0 条，去掉所有条件按城市拉');
+          candidates = await fetchCandidates(
+            {
+              ...intent,
+              categories: [],
+              keywords: [],
+              childFriendly: undefined,
+              outdoor: undefined,
+            },
+            { applyCategories: false },
+          );
         }
         if (cancelled) return;
 
