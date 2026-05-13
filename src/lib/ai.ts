@@ -177,16 +177,19 @@ function extractJson(tag: string, s: string): unknown {
     console.log(`[ai ${tag}] JSON.parse 成功`, parsed);
     return parsed;
   } catch (e) {
-    console.warn(`[ai ${tag}] 直接 JSON.parse 失败，尝试在文本中找 {...}：`, e);
+    console.warn(`[ai ${tag}] 直接 JSON.parse 失败，尝试在文本中找 JSON 片段：`, e);
   }
-  const m = cleaned.match(/\{[\s\S]*\}/);
-  if (!m) {
-    console.error(`[ai ${tag}] 文本中找不到 {} 包裹的 JSON`);
+  // 兜底：优先找数组 [...]，再找对象 {...}（rankAndExplain 期望数组）
+  const arrM = cleaned.match(/\[[\s\S]*\]/);
+  const objM = cleaned.match(/\{[\s\S]*\}/);
+  const candidate = arrM?.[0] ?? objM?.[0];
+  if (!candidate) {
+    console.error(`[ai ${tag}] 文本中找不到 [] 或 {} 包裹的 JSON`);
     throw new Error('LLM 返回不含 JSON');
   }
-  console.log(`[ai ${tag}] 提取 {...} 片段：\n`, m[0]);
+  console.log(`[ai ${tag}] 提取片段：\n`, candidate);
   try {
-    const parsed = JSON.parse(m[0]);
+    const parsed = JSON.parse(candidate);
     console.log(`[ai ${tag}] 片段 JSON.parse 成功`, parsed);
     return parsed;
   } catch (e) {
@@ -216,6 +219,8 @@ const INTENT_SYSTEM = `你是 Outio 出行推荐助手的意图解析模块。�
 
 用户："免费的公园，适合推婴儿车"
 输出：{"categories":["公园","景区"],"city":"北京市","keywords":[],"childFriendly":true,"outdoor":true,"season":null,"maxResults":30}
+
+注意：用户的需求通常是模糊的，要往宽了理解。"带孩子去玩"应该包含公园、游乐场、博物馆、采摘园、景区等多个分类。不要把分类限制得太窄。
 
 只返回 JSON，不要其他文字。`;
 
@@ -278,34 +283,37 @@ export async function parseIntent(
   };
 }
 
-const RANK_SYSTEM = `你是 Outio 出行推荐助手。根据用户需求和家庭画像，从候选目的地中精选最合适的，并为每个写一段有吸引力的推荐理由。
+const RANK_SYSTEM = `你是一个住在北京、经常带娃出门的朋友。你去过很多地方，踩过很多坑，也发现过很多宝藏。现在朋友问你推荐，你会像发小红书一样真诚分享。
 
 用户画像：
 - 家住北京顺义区后沙峪
-- 一家三口：爸爸、妈妈，和一个 18 个月大的孩子叫旺仔
-- 纯电车型（充电桩是加分项，不是硬性要求）
-- 偏好户外活动
+- 一家三口（爸爸妈妈+18个月的旺仔）
+- 纯电车（充电桩是加分不是必须）
+- 偏好户外
 
-推荐理由写作要求：
-- 25-60字，要有具体信息和场景感，不要泛泛而谈
-- 突出这个地方的独特卖点，不要每个都说"适合带孩子"
-- 可以提到具体的玩法、特色景观、最佳时间等
-- 如果知道这个地方的特点（比如有湖、有花、有动物），要具体说出来
-- 只在确实相关时提婴儿车 / 旺仔，不要每条都提
-- 语气轻松自然，像朋友推荐，不像导游念稿
+写推荐理由时：
+- 像朋友聊天一样说话，不要用"适合""推荐""值得"这种官方词
+- 说具体的体验和细节，比如"门口那条小路特别适合让娃自己走""湖边有一片草地可以铺垫子野餐"
+- 可以提醒实用信息，比如"周末人巨多建议工作日去""停车场在北门比较近""带上小推车比推车方便"
+- 如果知道这个地方有什么特别的（花、动物、水、沙子），一定要说
+- 根据旺仔的年龄（18个月，刚会走路，喜欢水和动物和沙子）来说为什么适合
+- 考虑从后沙峪出发的实际情况（京承高速方向更近、去城里堵车等）
+- 语气自然随意，可以用"超赞""踩雷""亲测"这种口语
+- 30-80字，不要太短也不要太长
 
-好的推荐理由示例：
-- "春天樱花大道绝美，小路平坦可以推车，湖边还能喂鸭子，旺仔肯定喜欢。"
-- "藏在胡同里的小型自然博物馆，恐龙化石和蝴蝶标本，小朋友看得走不动路。"
-- "京郊最容易到达的溪谷，水浅可以踩水，山不高但树荫多，夏天凉快。"
+好的例子：
+- "离后沙峪超近，走京承20分钟就到。有一片浅水区旺仔可以踩水，岸边沙地也能玩半天。周末去的话车位紧张，建议9点前到。"
+- "虽然叫博物馆但其实特别适合小娃，一楼有个沙池和滑梯区，旺仔这个月龄正好。二楼的恐龙骨架他肯定会盯着看。亲测能玩两小时。"
+- "就是个社区小公园但胜在人少安静，有个小湖可以看鸭子，草地很平可以让旺仔撒欢跑。缺点是没啥吃的，自己带点零食。"
 
-差的推荐理由（避免）：
-- "适合亲子游玩，环境不错。"（太泛）
-- "推着婴儿车带旺仔散步很方便。"（模板化）
+不好的例子（避免）：
+- "环境优美，适合亲子出游，是周末休闲的好去处。"（太官方）
+- "该公园设施完善，有儿童游乐区，适合家庭出行。"（像百度百科）
+- "推着婴儿车很方便，适合带小朋友游玩。"（没有任何具体信息）
 
-从候选中选出最适合的 5-10 个，按推荐度排序。输出 JSON 对象，包含 rankings 数组：
-{"rankings":[{"id":"目的地UUID","reason":"推荐理由"}]}
-只返回 JSON，不要其他文字。`;
+从候选中选最适合的5-10个，按推荐度排序。返回JSON数组：
+[{"id":"目的地UUID","reason":"推荐理由"}]
+只返回JSON。`;
 
 interface RankCandidate {
   id: string;
@@ -358,9 +366,11 @@ export async function rankAndExplain(
   console.log('[ai rankAndExplain] 开始，候选数:', candidates.length);
   let raw: string;
   try {
+    // jsonMode 强制顶层 object，会和 prompt 要求的数组返回冲突，故关闭
+    // markdown 围栏/解释文字由 extractJson 兜底
     raw = await callDeepSeek('rankAndExplain', RANK_SYSTEM, userPrompt, {
-      temperature: 0.5,
-      jsonMode: true,
+      temperature: 0.7,
+      jsonMode: false,
     });
   } catch (e) {
     console.error('[ai rankAndExplain] callDeepSeek 失败:', e);
