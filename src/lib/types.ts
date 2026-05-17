@@ -40,6 +40,9 @@ export interface Destination {
   data_source?: string | null;
   confidence?: string | null;
 
+  // 距用户/家坐标的直线距离（米）。只有走 search_nearby RPC 查询时才有值
+  distance_meters?: number | null;
+
   // ==== 仅视图层字段，DB 没有，由 enrichForView() 在客户端填充 ====
   drive_minutes?: number;  // 后续接 PostGIS 距离计算
   ai_reason?: string;      // 后续接 AI Edge Function

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { searchDestinations } from '../lib/api';
+import { searchDestinations, searchByDistance, HOME_COORDS } from '../lib/api';
 import { parseIntent, rankAndExplain, AiError } from '../lib/ai';
 import { mockProfile } from '../lib/mock';
 import { enrichForView } from '../lib/view';
@@ -15,75 +14,60 @@ interface State {
   fallback: boolean; // true 表示走了简单搜索 fallback
 }
 
-const SELECT_COLS = [
-  'id', 'source_id', 'name',
-  'country', 'province', 'city', 'district', 'address',
-  'main_category', 'sub_category', 'detail_type', 'tags',
-  'suitable_for', 'child_friendly', 'min_age', 'max_age', 'best_season', 'indoor_outdoor',
-  'description', 'tips', 'ticket_price', 'rating',
-  'has_parking', 'has_ev_charging', 'stroller_ok', 'wheelchair_ok',
-  'phone', 'website', 'data_source', 'confidence',
-].join(',');
-
 type Intent = Awaited<ReturnType<typeof parseIntent>>;
 
-// PostgREST or() value 里的 ',' '(' ')' 是分隔符，必须剔除避免破坏语法
-function sanitizeKw(s: string): string {
-  return s.trim().replace(/[,()*%]/g, ' ');
-}
-
 interface FetchOpts {
-  applyCategories?: boolean; // 默认 true；false 时跳过 main_category 限制
+  applyCategories?: boolean;     // false 时跳过 main_category 限制
+  applyKeyword?: boolean;        // false 时跳过 name/description 关键词
+  applyChildOutdoor?: boolean;   // false 时跳过 child_friendly + outdoor
+  expandRadius?: boolean;        // true 时把半径放大到 200km（一级放宽用）
 }
 
-// 用解析出的意图查 Supabase 拉候选
+// 用解析出的意图调 PostGIS RPC，按距离排序拿候选
 async function fetchCandidates(
   intent: Intent,
   opts: FetchOpts = {},
 ): Promise<Destination[]> {
   const applyCategories = opts.applyCategories ?? true;
+  const applyKeyword = opts.applyKeyword ?? true;
+  const applyChildOutdoor = opts.applyChildOutdoor ?? true;
 
-  let q = supabase
-    .from('destinations')
-    .select(SELECT_COLS)
-    .eq('city', intent.city);
-
-  if (applyCategories && intent.categories.length > 0) {
-    q = q.in('main_category', intent.categories);
-  }
-  if (intent.childFriendly === true) {
-    q = q.eq('child_friendly', true);
-  }
-  if (intent.outdoor === true) {
-    q = q.in('indoor_outdoor', ['outdoor', 'both']);
-  }
-
-  // 关键词：多关键词 OR 匹配（name 或 description 命中任意一个即可）
-  const kws = intent.keywords.map(sanitizeKw).filter(Boolean).slice(0, 2);
-  if (kws.length > 0) {
-    const orParts = kws.flatMap((k) => [
-      `name.ilike.%${k}%`,
-      `description.ilike.%${k}%`,
-    ]);
-    q = q.or(orParts.join(','));
-  }
-
+  const lat = intent.nearLat ?? HOME_COORDS.lat;
+  const lng = intent.nearLng ?? HOME_COORDS.lng;
+  const km = opts.expandRadius ? 200 : (intent.maxDistanceKm ?? 60);
   // 拉得比 maxResults 多一些，给 AI 精排留挑选空间。limit 必须是整数
   const limit = Math.max(Math.round(intent.maxResults * 1.5), 30);
-  q = q.limit(limit);
+
+  // 关键词：当前 RPC 只支持单 keyword 模糊；多关键词时取首个最长的
+  const kw = applyKeyword
+    ? intent.keywords
+        .map((k) => k.trim())
+        .filter(Boolean)
+        .sort((a, b) => b.length - a.length)[0]
+    : undefined;
+
   console.log('[useSearchResults] fetchCandidates', {
     intent,
     applyCategories,
-    keywords: kws,
+    applyKeyword,
+    applyChildOutdoor,
+    keyword: kw,
+    km,
     limit,
   });
-  const { data, error } = await q;
-  if (error) {
-    console.error('[useSearchResults] Supabase 查询出错:', error);
-    throw error;
-  }
-  console.log('[useSearchResults] Supabase 返回行数:', data?.length ?? 0);
-  return (data ?? []) as unknown as Destination[];
+
+  const rows = await searchByDistance({
+    lat,
+    lng,
+    maxDistanceMeters: km * 1000,
+    categories: applyCategories ? intent.categories : undefined,
+    childFriendly: applyChildOutdoor ? intent.childFriendly : undefined,
+    outdoor: applyChildOutdoor ? intent.outdoor : undefined,
+    keyword: kw,
+    limit,
+  });
+  console.log('[useSearchResults] RPC 返回行数:', rows.length);
+  return rows;
 }
 
 export function useSearchResults(query: string): State {
@@ -112,18 +96,21 @@ export function useSearchResults(query: string): State {
         if (cancelled) return;
         setState((s) => ({ ...s, stage: 'querying' }));
 
-        // ===== 2. 查 Supabase 拿候选 =====
+        // ===== 2. 调 PostGIS RPC 按距离拿候选 =====
         let candidates = await fetchCandidates(intent);
         if (cancelled) return;
 
-        // 一级放宽：候选 < 10 时去掉分类限制（保留 keywords / child / outdoor）
+        // 一级放宽：候选 < 10 时去掉分类 + 关键词限制（仍按距离 + 亲子/户外过滤）
         if (candidates.length < 10) {
           console.log(
-            `[useSearchResults] 候选只有 ${candidates.length} 条，放宽分类限制重试`,
+            `[useSearchResults] 候选只有 ${candidates.length} 条，放宽分类/关键词重试`,
           );
-          const broader = await fetchCandidates(intent, { applyCategories: false });
+          const broader = await fetchCandidates(intent, {
+            applyCategories: false,
+            applyKeyword: false,
+          });
           if (cancelled) return;
-          // 用 id 去重合并，原候选优先
+          // 用 id 去重合并，原候选优先（保留 distance_meters 排序）
           const seen = new Set(candidates.map((c) => c.id));
           for (const c of broader) {
             if (!seen.has(c.id)) {
@@ -133,19 +120,15 @@ export function useSearchResults(query: string): State {
           }
         }
 
-        // 二级放宽：还是 0 条 → 把 keywords / child / outdoor 也去掉，只按 city 拉
+        // 二级放宽：仍 0 条 → 去掉亲子/户外，并把半径扩到 200km
         if (candidates.length === 0) {
-          console.log('[useSearchResults] 仍 0 条，去掉所有条件按城市拉');
-          candidates = await fetchCandidates(
-            {
-              ...intent,
-              categories: [],
-              keywords: [],
-              childFriendly: undefined,
-              outdoor: undefined,
-            },
-            { applyCategories: false },
-          );
+          console.log('[useSearchResults] 仍 0 条，去掉所有条件并扩大半径到 200km');
+          candidates = await fetchCandidates(intent, {
+            applyCategories: false,
+            applyKeyword: false,
+            applyChildOutdoor: false,
+            expandRadius: true,
+          });
         }
         if (cancelled) return;
 

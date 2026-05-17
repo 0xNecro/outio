@@ -22,6 +22,11 @@ export interface ParsedIntent {
   outdoor?: boolean;
   season?: string;
   maxResults: number;
+  // 地理距离相关：用于走 PostGIS search_nearby RPC
+  nearLat?: number;     // 中心点纬度，未提到具体地点时用家坐标
+  nearLng?: number;     // 中心点经度
+  nearName?: string;    // 中心点名称（如"后沙峪"）；纯调试用
+  maxDistanceKm?: number; // 最大半径（公里）。"附近"≈10、"不想开太远"≈30、"1h 车程"≈60
 }
 
 export interface AiRanking {
@@ -210,15 +215,46 @@ const INTENT_SYSTEM = `你是 Outio 出行推荐助手的意图解析模块。�
 
 可选的 categories 值：${ALLOWED_CATEGORIES.join('、')}
 
+地理距离字段（重要）：
+- nearLat / nearLng：搜索中心点经纬度（WGS84）。
+  * 用户提到具体地点（"后沙峪附近"/"望京周边"/"奥森旁边"）→ 解析出该地点的近似坐标
+  * 没提地点 → 用家坐标 lat=40.086, lng=116.537（后沙峪）
+  * 北京常见地点参考坐标：
+    - 后沙峪/天竺：40.086, 116.537
+    - 望京：40.000, 116.470
+    - 国贸/CBD：39.910, 116.460
+    - 三里屯：39.937, 116.456
+    - 海淀中关村：39.984, 116.316
+    - 西二旗：40.054, 116.300
+    - 奥森公园：40.012, 116.398
+    - 颐和园：39.999, 116.275
+    - 香山：39.997, 116.190
+    - 怀柔城区：40.316, 116.642
+    - 密云水库：40.485, 116.872
+    - 雁栖湖：40.422, 116.677
+    - 古北水镇：40.660, 117.220
+    - 通州城区：39.910, 116.660
+    - 大兴黄村：39.728, 116.341
+    - 房山良乡：39.736, 116.137
+- maxDistanceKm：用户对距离的容忍度（公里）
+  * "附近"/"周边"/"旁边" → 10
+  * "不远"/"不想开太远" → 30
+  * "1 小时车程"/"郊区也行" → 60
+  * 没提及 → 60
+- 如果用户问的是"哪里"这种无地点限定的泛问，保持 nearLat/Lng = 家坐标、maxDistanceKm = 60
+
 示例：
 用户："带孩子去有山有水的地方"
-输出：{"categories":["景区","公园","水上活动","露营地","度假村"],"city":"北京市","keywords":["山","水"],"childFriendly":true,"outdoor":null,"season":null,"maxResults":30}
+输出：{"categories":["景区","公园","水上活动","露营地","度假村"],"city":"北京市","keywords":["山","水"],"childFriendly":true,"outdoor":null,"season":null,"maxResults":30,"nearLat":40.086,"nearLng":116.537,"nearName":"后沙峪(家)","maxDistanceKm":60}
 
-用户："室内儿童乐园"
-输出：{"categories":["游乐场","亲子活动","休闲娱乐","亲子服务"],"city":"北京市","keywords":["儿童乐园","室内"],"childFriendly":true,"outdoor":false,"season":null,"maxResults":30}
+用户："后沙峪附近带旺仔玩的地方"
+输出：{"categories":["公园","游乐场","景区","采摘园","亲子活动"],"city":"北京市","keywords":[],"childFriendly":true,"outdoor":null,"season":null,"maxResults":30,"nearLat":40.086,"nearLng":116.537,"nearName":"后沙峪","maxDistanceKm":10}
 
-用户："免费的公园，适合推婴儿车"
-输出：{"categories":["公园","景区"],"city":"北京市","keywords":[],"childFriendly":true,"outdoor":true,"season":null,"maxResults":30}
+用户："望京周边的室内儿童乐园"
+输出：{"categories":["游乐场","亲子活动","休闲娱乐","亲子服务"],"city":"北京市","keywords":["儿童乐园"],"childFriendly":true,"outdoor":false,"season":null,"maxResults":30,"nearLat":40.000,"nearLng":116.470,"nearName":"望京","maxDistanceKm":10}
+
+用户："1 小时车程内的采摘园"
+输出：{"categories":["采摘园","景区"],"city":"北京市","keywords":[],"childFriendly":null,"outdoor":true,"season":null,"maxResults":30,"nearLat":40.086,"nearLng":116.537,"nearName":"后沙峪(家)","maxDistanceKm":60}
 
 注意：用户的需求通常是模糊的，要往宽了理解。"带孩子去玩"应该包含公园、游乐场、博物馆、采摘园、景区等多个分类。不要把分类限制得太窄。
 
@@ -265,6 +301,22 @@ export async function parseIntent(
   const rawCity = typeof parsed.city === 'string' && parsed.city ? parsed.city : '北京市';
   const city = /[市州县区]$/.test(rawCity) ? rawCity : `${rawCity}市`;
 
+  // 地理字段。模型给的坐标如果不在合理范围内（中国大陆 lat 18-54, lng 73-135）就当无效，回退家坐标
+  const rawLat = typeof parsed.nearLat === 'number' ? parsed.nearLat : NaN;
+  const rawLng = typeof parsed.nearLng === 'number' ? parsed.nearLng : NaN;
+  const latOk = rawLat >= 18 && rawLat <= 54;
+  const lngOk = rawLng >= 73 && rawLng <= 135;
+  const nearLat = latOk ? rawLat : 40.086;
+  const nearLng = lngOk ? rawLng : 116.537;
+  const nearName =
+    typeof parsed.nearName === 'string' && parsed.nearName ? parsed.nearName : undefined;
+
+  const rawKm = typeof parsed.maxDistanceKm === 'number' ? parsed.maxDistanceKm : NaN;
+  // 限定 [1, 200] 公里，防止模型瞎给
+  const maxDistanceKm = Number.isFinite(rawKm) && rawKm > 0
+    ? Math.min(Math.max(rawKm, 1), 200)
+    : 60;
+
   return {
     categories: validCats,
     city,
@@ -280,6 +332,10 @@ export async function parseIntent(
       typeof parsed.maxResults === 'number' && parsed.maxResults > 0
         ? Math.min(parsed.maxResults, 30)
         : 30,
+    nearLat,
+    nearLng,
+    nearName,
+    maxDistanceKm,
   };
 }
 
@@ -328,6 +384,7 @@ interface RankCandidate {
   indoor_outdoor?: string | null;
   has_ev_charging?: boolean | null;
   rating?: number | null;
+  distance_km?: number | null;
 }
 
 // 给 LLM 看的候选简化版（剔掉前端视图字段、长字段截断）
@@ -345,6 +402,10 @@ function toCandidate(d: Destination): RankCandidate {
     indoor_outdoor: d.indoor_outdoor,
     has_ev_charging: d.has_ev_charging,
     rating: d.rating,
+    distance_km:
+      typeof d.distance_meters === 'number'
+        ? Math.round((d.distance_meters / 1000) * 10) / 10
+        : null,
   };
 }
 

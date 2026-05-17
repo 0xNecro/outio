@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listDestinations, type QuickTag } from '../lib/api';
+import { searchByDistance, HOME_COORDS, DEFAULT_MAX_DISTANCE_METERS } from '../lib/api';
 import { enrichForView } from '../lib/view';
 import type { Destination } from '../lib/types';
 
@@ -9,10 +9,13 @@ interface State {
   error: string | null;
 }
 
+// Home 页用：以家坐标为中心按距离从近到远拉默认推荐
+// filters / search 留作未来扩展（目前 Home 的 QuickTag 是 navigate 到 /search，不会带参数进来）
 export function useDestinations(opts: {
-  city?: string;
-  filters?: readonly QuickTag[];
-  search?: string;
+  lat?: number;
+  lng?: number;
+  maxDistanceMeters?: number;
+  limit?: number;
 }): State {
   const [state, setState] = useState<State>({
     data: [],
@@ -20,16 +23,16 @@ export function useDestinations(opts: {
     error: null,
   });
 
-  // filters 数组每次渲染是新引用，序列化作为 dep 避免无限请求
-  const filtersKey = (opts.filters ?? []).slice().sort().join('|');
-  const search = opts.search ?? '';
-  const city = opts.city;
+  const lat = opts.lat ?? HOME_COORDS.lat;
+  const lng = opts.lng ?? HOME_COORDS.lng;
+  const maxDist = opts.maxDistanceMeters ?? DEFAULT_MAX_DISTANCE_METERS;
+  const limit = opts.limit ?? 20;
 
   useEffect(() => {
     let cancelled = false;
     setState((s) => ({ ...s, loading: true, error: null }));
 
-    listDestinations({ city, filters: opts.filters, search })
+    searchByDistance({ lat, lng, maxDistanceMeters: maxDist, limit })
       .then((rows) => {
         if (cancelled) return;
         setState({
@@ -50,8 +53,7 @@ export function useDestinations(opts: {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [city, filtersKey, search]);
+  }, [lat, lng, maxDist, limit]);
 
   return state;
 }

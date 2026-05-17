@@ -25,10 +25,8 @@ export default function Home() {
     navigate(`/search?q=${encodeURIComponent(q)}`);
   };
 
-  const { data, loading, error } = useDestinations({
-    city: '北京市',
-    filters: [],
-  });
+  // 默认以家坐标（后沙峪）为中心、按距离从近到远拉推荐
+  const { data, loading, error } = useDestinations({});
 
   return (
     <>
@@ -98,7 +96,7 @@ export default function Home() {
           className="mt-xs text-secondary"
           style={{ fontSize: '12px', lineHeight: 1.4 }}
         >
-          北京市 · 景区/公园/博物馆等核心目的地，有简介者优先
+          以后沙峪为中心 · 距离由近到远
         </p>
 
         {/* 状态分支：加载 / 错误 / 空 / 列表 */}

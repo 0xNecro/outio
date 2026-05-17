@@ -53,7 +53,7 @@ export default function DestinationCard({ destination: d }: DestinationCardProps
         )}
       </div>
 
-      {/* Row 2: 位置 + 车程 */}
+      {/* Row 2: 位置 + 距家距离 */}
       <div
         className="mt-xs flex items-center gap-xs text-secondary"
         style={{ fontSize: '12px', lineHeight: 1.4 }}
@@ -62,7 +62,13 @@ export default function DestinationCard({ destination: d }: DestinationCardProps
           location_on
         </span>
         <span>{d.district ?? d.city}</span>
-        {d.drive_minutes != null && (
+        {typeof d.distance_meters === 'number' && (
+          <>
+            <span aria-hidden>·</span>
+            <span>距家 {formatKm(d.distance_meters)} km</span>
+          </>
+        )}
+        {d.distance_meters == null && d.drive_minutes != null && (
           <>
             <span aria-hidden>·</span>
             <span>车程 {d.drive_minutes} 分钟</span>
@@ -127,6 +133,13 @@ export default function DestinationCard({ destination: d }: DestinationCardProps
       )}
     </button>
   );
+}
+
+// 距离格式化：<10km 保留 1 位小数，>=10km 取整，避免"32.7km"的精度幻觉
+function formatKm(meters: number): string {
+  const km = meters / 1000;
+  if (km < 10) return km.toFixed(1);
+  return Math.round(km).toString();
 }
 
 function Pill({ children }: { children: React.ReactNode }) {

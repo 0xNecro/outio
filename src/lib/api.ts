@@ -5,6 +5,12 @@ import type { Destination } from './types';
 export const DEFAULT_CITY = '北京市';
 const DEFAULT_LIMIT = 20;
 
+// 用户家坐标：顺义后沙峪（WGS84）。Phase 2 接入 user_profiles 后从 DB 读
+export const HOME_COORDS = { lat: 40.086, lng: 116.537 } as const;
+
+// 默认最大距离（米）。60km 大致覆盖北京六环 + 周边大部分郊区景点
+export const DEFAULT_MAX_DISTANCE_METERS = 60_000;
+
 // 字段白名单：location 是 PostGIS WKB 二进制，前端不渲染就不查，省带宽
 const SELECT_COLS = [
   'id', 'source_id', 'name',
@@ -149,6 +155,41 @@ export async function getDestination(id: string): Promise<Destination | null> {
     .maybeSingle();
   if (error) throw error;
   return (data as unknown as Destination | null) ?? null;
+}
+
+interface NearbyOpts {
+  lat?: number;
+  lng?: number;
+  maxDistanceMeters?: number;
+  categories?: string[];
+  childFriendly?: boolean;
+  outdoor?: boolean;
+  keyword?: string;
+  limit?: number;
+}
+
+// 调 PostGIS RPC 按距离排序。默认以家坐标为中心、60km 内、按距离从近到远
+export async function searchByDistance(opts: NearbyOpts = {}): Promise<Destination[]> {
+  const lat = opts.lat ?? HOME_COORDS.lat;
+  const lng = opts.lng ?? HOME_COORDS.lng;
+  const maxDist = opts.maxDistanceMeters ?? DEFAULT_MAX_DISTANCE_METERS;
+  const limit = opts.limit ?? DEFAULT_LIMIT;
+
+  const { data, error } = await supabase.rpc('search_nearby', {
+    user_lat: lat,
+    user_lng: lng,
+    max_distance_meters: maxDist,
+    category_filter: opts.categories && opts.categories.length > 0 ? opts.categories : null,
+    child_friendly_filter: typeof opts.childFriendly === 'boolean' ? opts.childFriendly : null,
+    outdoor_filter: typeof opts.outdoor === 'boolean' ? opts.outdoor : null,
+    keyword: opts.keyword?.trim() ? safeIlikeValue(opts.keyword) : null,
+    result_limit: limit,
+  });
+  if (error) {
+    console.error('[api.searchByDistance] RPC 出错:', error);
+    throw error;
+  }
+  return (data ?? []) as unknown as Destination[];
 }
 
 // SearchResults 页用：全表 name 模糊匹配（不限制分类、不要求 description 非空）
