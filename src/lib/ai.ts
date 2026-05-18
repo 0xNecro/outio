@@ -207,10 +207,10 @@ const INTENT_SYSTEM = `你是 Outio 出行推荐助手的意图解析模块。�
 
 核心原则：
 - 宽松匹配：宁可多返回候选，不要过度限制。用户说"有山有水"不代表必须同时有山和水
-- categories 尽量给 3-5 个相关分类，不要只给1个
-- keywords 最多给2个核心关键词，不要把用户每个字都变成关键词
+- categories 尽量给 5-8 个相关分类，不要只给1-2个；对于"带娃玩/带孩子去哪/遛娃"等极宽泛的需求，**直接给空数组 []**，让 child_friendly + 距离 来筛
+- keywords 严格控制：只有用户明确点名某个事物（"恐龙博物馆"、"草莓采摘"）才给。**家庭成员昵称（旺仔、宝宝、娃、孩子、老人）一律不要进 keywords**，那是画像信息不是搜索关键词
 - childFriendly/outdoor/season 只在用户明确提到时才设为 true/false，否则设为 null
-- maxResults 默认 30(给精排留够候选)
+- maxResults 固定 30(给精排留够候选)
 - city 默认"北京市"
 
 可选的 categories 值：${ALLOWED_CATEGORIES.join('、')}
@@ -248,7 +248,11 @@ const INTENT_SYSTEM = `你是 Outio 出行推荐助手的意图解析模块。�
 输出：{"categories":["景区","公园","水上活动","露营地","度假村"],"city":"北京市","keywords":["山","水"],"childFriendly":true,"outdoor":null,"season":null,"maxResults":30,"nearLat":40.086,"nearLng":116.537,"nearName":"后沙峪(家)","maxDistanceKm":60}
 
 用户："后沙峪附近带旺仔玩的地方"
-输出：{"categories":["公园","游乐场","景区","采摘园","亲子活动"],"city":"北京市","keywords":[],"childFriendly":true,"outdoor":null,"season":null,"maxResults":30,"nearLat":40.086,"nearLng":116.537,"nearName":"后沙峪","maxDistanceKm":10}
+输出：{"categories":[],"city":"北京市","keywords":[],"childFriendly":true,"outdoor":null,"season":null,"maxResults":30,"nearLat":40.086,"nearLng":116.537,"nearName":"后沙峪","maxDistanceKm":10}
+（说明：用户没指定要去什么类型的地方，"旺仔"是孩子昵称不是关键词。categories 留空让数据库按距离+childFriendly 全召回，避免只查"游乐场"这种窄类目时近距离没几个）
+
+用户："后沙峪附近适合带旺仔玩的地方"
+输出：{"categories":[],"city":"北京市","keywords":[],"childFriendly":true,"outdoor":null,"season":null,"maxResults":30,"nearLat":40.086,"nearLng":116.537,"nearName":"后沙峪","maxDistanceKm":10}
 
 用户："望京周边的室内儿童乐园"
 输出：{"categories":["游乐场","亲子活动","休闲娱乐","亲子服务"],"city":"北京市","keywords":["儿童乐园"],"childFriendly":true,"outdoor":false,"season":null,"maxResults":30,"nearLat":40.000,"nearLng":116.470,"nearName":"望京","maxDistanceKm":10}
@@ -296,6 +300,23 @@ export async function parseIntent(
   const validCats = cats
     .filter((c): c is string => typeof c === 'string')
     .filter((c) => (ALLOWED_CATEGORIES as readonly string[]).includes(c));
+  if (cats.length !== validCats.length) {
+    console.warn(
+      '[ai parseIntent] 类目过滤掉非法值:',
+      cats.filter((c) => !validCats.includes(c)),
+    );
+  }
+  console.log('[ai parseIntent] LLM 原始字段:', {
+    categories: parsed.categories,
+    keywords: parsed.keywords,
+    childFriendly: parsed.childFriendly,
+    outdoor: parsed.outdoor,
+    nearLat: parsed.nearLat,
+    nearLng: parsed.nearLng,
+    nearName: parsed.nearName,
+    maxDistanceKm: parsed.maxDistanceKm,
+    maxResults: parsed.maxResults,
+  });
 
   // 容错：模型可能返回 "北京" 而 DB 是 "北京市"
   const rawCity = typeof parsed.city === 'string' && parsed.city ? parsed.city : '北京市';
@@ -328,9 +349,10 @@ export async function parseIntent(
     outdoor: typeof parsed.outdoor === 'boolean' ? parsed.outdoor : undefined,
     season:
       typeof parsed.season === 'string' && parsed.season ? parsed.season : undefined,
+    // 强制至少 30：避免 LLM 偶尔返回 5/10 这种小值导致最终展示数量被截断
     maxResults:
       typeof parsed.maxResults === 'number' && parsed.maxResults > 0
-        ? Math.min(parsed.maxResults, 30)
+        ? Math.min(Math.max(parsed.maxResults, 30), 50)
         : 30,
     nearLat,
     nearLng,
