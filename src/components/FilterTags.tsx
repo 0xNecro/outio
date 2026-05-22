@@ -4,7 +4,7 @@ interface FilterTagsProps {
   onToggle: (tag: string) => void;
 }
 
-// design.md 2.3：横向滚动 + 隐藏滚动条；px 16 py 4，rounded-full，gap 8
+// design.md 2.3：横向滚动 + 隐藏滚动条；px 16 py 4，pill 圆角，gap 8
 export default function FilterTags({ tags, selected, onToggle }: FilterTagsProps) {
   return (
     <div
@@ -21,7 +21,7 @@ export default function FilterTags({ tags, selected, onToggle }: FilterTagsProps
             className="whitespace-nowrap transition-colors"
             style={{
               padding: '4px 16px',
-              borderRadius: '12px',
+              borderRadius: 'var(--radius-full)',
               fontSize: '12px',
               fontWeight: 500,
               letterSpacing: '0.02em',
@@ -31,7 +31,7 @@ export default function FilterTags({ tags, selected, onToggle }: FilterTagsProps
               color: active
                 ? 'var(--color-tag-selected-text)'
                 : 'var(--color-tag-neutral-text)',
-              border: `1px solid ${active ? 'rgba(83,74,183,0.1)' : 'transparent'}`,
+              border: `1px solid ${active ? 'var(--color-tag-selected-border)' : 'transparent'}`,
             }}
           >
             {tag}

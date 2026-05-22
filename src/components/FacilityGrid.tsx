@@ -34,7 +34,7 @@ export default function FacilityGrid({ destination: d }: FacilityGridProps) {
           style={{
             backgroundColor: 'var(--color-surface-container-lowest)',
             border: '1px solid var(--color-card-border)',
-            borderRadius: '4px',
+            borderRadius: 'var(--radius-lg)',
             padding: '12px 8px',
             minHeight: '80px',
           }}

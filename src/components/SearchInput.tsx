@@ -8,7 +8,7 @@ interface SearchInputProps {
   onSubmit?: (value: string) => void;
 }
 
-// design.md 2.2：高度 48px，白底，border #DDDBD6，rounded-xl，focus 时 border-primary
+// design.md 2.2：高度 48px，白底，card-border，pill 圆角，focus 时 border-primary
 export default function SearchInput({
   defaultValue = '',
   placeholder = '想去哪儿？带孩子周末去...',
@@ -29,7 +29,7 @@ export default function SearchInput({
       className="flex items-center gap-sm bg-surface-container-lowest transition-colors"
       style={{
         height: '48px',
-        borderRadius: '12px',
+        borderRadius: 'var(--radius-full)',
         border: `1px solid ${focused ? 'var(--color-primary)' : 'var(--color-card-border)'}`,
         padding: '0 16px',
       }}

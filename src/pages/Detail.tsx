@@ -20,7 +20,7 @@ export default function Detail() {
             style={{
               backgroundColor: 'var(--color-surface-container-high)',
               height: '224px',
-              borderRadius: '4px',
+              borderRadius: 'var(--radius-lg)',
             }}
           />
           <div
@@ -29,7 +29,7 @@ export default function Detail() {
               backgroundColor: 'var(--color-surface-container)',
               height: '14px',
               width: '70%',
-              borderRadius: '4px',
+              borderRadius: 'var(--radius-xl)',
               marginTop: '20px',
             }}
           />
@@ -85,7 +85,7 @@ export default function Detail() {
               gridColumn: 'span 4',
               height: '224px',
               backgroundColor: d.hero_color ?? 'var(--color-surface-container-high)',
-              borderRadius: '4px',
+              borderRadius: 'var(--radius-lg)',
             }}
           />
           <div
@@ -93,7 +93,7 @@ export default function Detail() {
               gridColumn: 'span 2',
               height: '96px',
               backgroundColor: 'var(--color-surface-container-high)',
-              borderRadius: '4px',
+              borderRadius: 'var(--radius-lg)',
             }}
           />
           <div
@@ -101,7 +101,7 @@ export default function Detail() {
               gridColumn: 'span 2',
               height: '96px',
               backgroundColor: 'var(--color-surface-container)',
-              borderRadius: '4px',
+              borderRadius: 'var(--radius-lg)',
             }}
           />
         </section>
@@ -112,7 +112,7 @@ export default function Detail() {
             className="bg-surface-container-lowest"
             style={{
               border: '1px solid var(--color-card-border)',
-              borderRadius: '4px',
+              borderRadius: 'var(--radius-lg)',
               padding: '4px 16px',
             }}
           >
@@ -181,7 +181,7 @@ export default function Detail() {
                 className="mt-sm flex items-start gap-sm"
                 style={{
                   backgroundColor: 'var(--color-surface-container-low)',
-                  borderRadius: '4px',
+                  borderRadius: 'var(--radius-lg)',
                   padding: '12px',
                 }}
               >
@@ -242,7 +242,7 @@ export default function Detail() {
               height: '160px',
               backgroundColor: 'var(--color-surface-container)',
               border: '1px solid var(--color-card-border)',
-              borderRadius: '4px',
+              borderRadius: 'var(--radius-lg)',
               color: 'var(--color-outline)',
             }}
           >
@@ -270,7 +270,7 @@ export default function Detail() {
           className="flex flex-1 items-center justify-center gap-xs"
           style={{
             height: '44px',
-            borderRadius: '12px',
+            borderRadius: 'var(--radius-full)',
             backgroundColor: 'var(--color-surface-container)',
             color: 'var(--color-on-surface-variant)',
             fontSize: '14px',
@@ -291,7 +291,7 @@ export default function Detail() {
           className="flex flex-1 items-center justify-center gap-xs"
           style={{
             height: '44px',
-            borderRadius: '12px',
+            borderRadius: 'var(--radius-full)',
             backgroundColor: 'var(--color-primary)',
             color: 'var(--color-on-primary)',
             fontSize: '14px',
@@ -366,7 +366,7 @@ function Tag({ children, primary = false }: { children: React.ReactNode; primary
       className="whitespace-nowrap"
       style={{
         padding: '4px 12px',
-        borderRadius: '12px',
+        borderRadius: 'var(--radius-full)',
         fontSize: '12px',
         fontWeight: 500,
         letterSpacing: '0.02em',

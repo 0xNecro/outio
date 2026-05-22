@@ -215,7 +215,7 @@ function Card({
         style={{
           backgroundColor: 'var(--color-surface-container-lowest)',
           border: '1px solid var(--color-card-border)',
-          borderRadius: '4px',
+          borderRadius: 'var(--radius-lg)',
           padding: '0 16px',
         }}
       >
@@ -306,7 +306,7 @@ function Toggle({
       style={{
         width: '44px',
         height: '24px',
-        borderRadius: '12px',
+        borderRadius: 'var(--radius-full)',
         backgroundColor: on ? 'var(--color-primary)' : 'var(--color-surface-container-high)',
       }}
       aria-pressed={on}

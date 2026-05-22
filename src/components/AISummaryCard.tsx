@@ -4,43 +4,30 @@ interface AISummaryCardProps {
   title?: string;
 }
 
-// design.md 2.6：AI 卡片，primary-container bg(#534ab7)，浅色文字
+// design.md 5.5：AI 卡片与目的地卡片同样式，不加特殊装饰
 export default function AISummaryCard({
   text,
   title = '为什么推荐给你',
 }: AISummaryCardProps) {
   return (
     <section
-      className="relative overflow-hidden text-on-primary-container"
+      className="text-on-surface"
       style={{
-        backgroundColor: 'var(--color-primary-container)',
-        borderRadius: '4px',
-        padding: '20px',
+        backgroundColor: 'var(--color-card-bg)',
+        border: '1px solid var(--color-card-border)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '16px',
       }}
     >
-      {/* 装饰图标 */}
-      <span
-        className="material-symbols-outlined absolute pointer-events-none"
-        style={{
-          right: '-8px',
-          bottom: '-12px',
-          fontSize: '120px',
-          color: 'rgba(255,255,255,0.08)',
-        }}
-        aria-hidden
-      >
-        auto_awesome
-      </span>
-
-      <div className="relative flex items-center gap-sm">
+      <div className="flex items-center gap-sm">
         <span
           className="material-symbols-outlined"
-          style={{ fontSize: '20px', color: 'var(--color-on-primary-container)' }}
+          style={{ fontSize: '20px', color: 'var(--color-primary)' }}
         >
           smart_toy
         </span>
         <h4
-          className="text-on-primary"
+          className="text-on-surface"
           style={{
             fontSize: '14px',
             fontWeight: 500,
@@ -51,7 +38,7 @@ export default function AISummaryCard({
         </h4>
       </div>
       <p
-        className="relative mt-sm text-on-primary"
+        className="mt-sm text-on-surface-variant"
         style={{ fontSize: '14px', lineHeight: 1.6 }}
       >
         {text}

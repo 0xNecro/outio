@@ -21,7 +21,7 @@ export default function DestinationCardImage({
       style={{
         backgroundColor: 'var(--color-surface-container-lowest)',
         border: '1px solid var(--color-card-border)',
-        borderRadius: '4px',
+        borderRadius: 'var(--radius-lg)',
       }}
     >
       {/* Hero 占位区（h-48） */}
@@ -40,8 +40,8 @@ export default function DestinationCardImage({
               fontWeight: 500,
               letterSpacing: '0.02em',
               padding: '4px 10px',
-              borderRadius: '12px',
-              backgroundColor: 'rgba(255,255,255,0.92)',
+              borderRadius: 'var(--radius-full)',
+              backgroundColor: 'var(--color-card-overlay)',
               color: 'var(--color-on-surface)',
             }}
           >

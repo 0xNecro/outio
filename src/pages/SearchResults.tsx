@@ -26,7 +26,7 @@ export default function SearchResults() {
               maxWidth: '85%',
               backgroundColor: 'var(--color-primary)',
               color: 'var(--color-on-primary)',
-              borderRadius: '12px',
+              borderRadius: 'var(--radius-full)',
               padding: '12px 16px',
               fontSize: '14px',
               lineHeight: 1.5,
@@ -84,7 +84,7 @@ export default function SearchResults() {
               className="flex flex-1 items-center justify-center gap-xs"
               style={{
                 height: '40px',
-                borderRadius: '12px',
+                borderRadius: 'var(--radius-full)',
                 backgroundColor: 'var(--color-surface-container)',
                 color: 'var(--color-on-surface-variant)',
                 fontSize: '13px',
@@ -105,7 +105,7 @@ export default function SearchResults() {
               className="flex flex-1 items-center justify-center gap-xs"
               style={{
                 height: '40px',
-                borderRadius: '12px',
+                borderRadius: 'var(--radius-full)',
                 backgroundColor: 'var(--color-primary-fixed)',
                 color: 'var(--color-primary)',
                 fontSize: '13px',
@@ -170,7 +170,7 @@ function StageIndicator({
       className="mt-md flex items-center gap-sm"
       style={{
         backgroundColor: 'var(--color-surface-container-low)',
-        borderRadius: '12px',
+        borderRadius: 'var(--radius-lg)',
         padding: '12px 16px',
         maxWidth: '85%',
       }}

@@ -29,7 +29,7 @@ export default function TopAppBar({
             {/* 32x32 logo（深色底，白色 explore 图标） */}
             <div
               className="flex items-center justify-center bg-on-surface text-on-primary"
-              style={{ width: '32px', height: '32px', borderRadius: '8px' }}
+              style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-xl)' }}
             >
               <span
                 className="material-symbols-outlined"

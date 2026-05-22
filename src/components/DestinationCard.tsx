@@ -6,7 +6,7 @@ interface DestinationCardProps {
 }
 
 // design.md 2.4：纯文字+图标卡片（首页用）
-// 白底 + card-border + rounded-lg(4px) + p-md(16px)
+// 白底 + card-border + rounded-lg(12px) + p-md(16px)
 export default function DestinationCard({ destination: d }: DestinationCardProps) {
   const navigate = useNavigate();
 
@@ -18,7 +18,7 @@ export default function DestinationCard({ destination: d }: DestinationCardProps
       style={{
         backgroundColor: 'var(--color-surface-container-lowest)',
         border: '1px solid var(--color-card-border)',
-        borderRadius: '4px',
+        borderRadius: 'var(--radius-lg)',
         padding: '16px',
       }}
     >
@@ -43,7 +43,7 @@ export default function DestinationCard({ destination: d }: DestinationCardProps
               fontWeight: 500,
               letterSpacing: '0.02em',
               padding: '2px 8px',
-              borderRadius: '8px',
+              borderRadius: 'var(--radius-full)',
               backgroundColor: 'var(--color-secondary-container)',
               color: 'var(--color-on-surface-variant)',
             }}
@@ -114,7 +114,7 @@ export default function DestinationCard({ destination: d }: DestinationCardProps
         >
           <div
             className="mt-[2px] flex shrink-0 items-center justify-center bg-primary-fixed text-primary"
-            style={{ width: '24px', height: '24px', borderRadius: '12px' }}
+            style={{ width: '24px', height: '24px', borderRadius: '9999px' }}
           >
             <span
               className="material-symbols-outlined"
@@ -150,7 +150,7 @@ function Pill({ children }: { children: React.ReactNode }) {
         fontWeight: 500,
         letterSpacing: '0.02em',
         padding: '2px 8px',
-        borderRadius: '12px',
+        borderRadius: 'var(--radius-full)',
         backgroundColor: 'var(--color-surface-container)',
         color: 'var(--color-on-surface-variant)',
       }}

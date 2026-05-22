@@ -134,7 +134,7 @@ function Skeletons({ count }: { count: number }) {
           style={{
             backgroundColor: 'var(--color-surface-container-lowest)',
             border: '1px solid var(--color-card-border)',
-            borderRadius: '4px',
+            borderRadius: 'var(--radius-lg)',
             padding: '16px',
             height: '160px',
           }}
@@ -144,7 +144,7 @@ function Skeletons({ count }: { count: number }) {
               backgroundColor: 'var(--color-surface-container-high)',
               height: '14px',
               width: '60%',
-              borderRadius: '4px',
+              borderRadius: 'var(--radius-xl)',
             }}
           />
           <div
@@ -152,7 +152,7 @@ function Skeletons({ count }: { count: number }) {
               backgroundColor: 'var(--color-surface-container)',
               height: '10px',
               width: '40%',
-              borderRadius: '4px',
+              borderRadius: 'var(--radius-xl)',
               marginTop: '12px',
             }}
           />
@@ -161,7 +161,7 @@ function Skeletons({ count }: { count: number }) {
               backgroundColor: 'var(--color-surface-container)',
               height: '10px',
               width: '90%',
-              borderRadius: '4px',
+              borderRadius: 'var(--radius-xl)',
               marginTop: '20px',
             }}
           />
@@ -179,7 +179,7 @@ function ErrorBox({ message, hint }: { message: string; hint?: string }) {
         backgroundColor: 'var(--color-error-container)',
         color: 'var(--color-on-error-container)',
         border: '1px solid var(--color-error-container)',
-        borderRadius: '4px',
+        borderRadius: 'var(--radius-lg)',
         padding: '12px',
         fontSize: '13px',
         lineHeight: 1.5,
@@ -198,7 +198,7 @@ function EmptyBox({ message }: { message: string }) {
       className="mt-md flex flex-col items-center justify-center text-secondary"
       style={{
         backgroundColor: 'var(--color-surface-container-low)',
-        borderRadius: '4px',
+        borderRadius: 'var(--radius-lg)',
         padding: '32px 16px',
         fontSize: '13px',
       }}
